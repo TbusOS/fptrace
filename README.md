@@ -170,13 +170,28 @@ make clean  # 清理
 | strip 后 | ❌ |
 | 内联函数 | ❌ |
 
-### 嵌入式环境
+### 嵌入式环境（NO_DLADDR 模式）
 
 如果没有 `libdl`，可以使用纯 ELF 解析模式：
 
 ```bash
 gcc -DNO_DLADDR main.c fptrace.c -o program
 ```
+
+**NO_DLADDR 模式的使用条件（必须全部满足）：**
+
+| 条件 | 说明 |
+|-----|------|
+| Linux 系统 | 依赖 /proc 文件系统和 ELF 格式 |
+| `/proc/self/exe` 可读 | 用于获取可执行文件路径 |
+| `/proc/self/maps` 可读 | 用于获取 PIE/ASLR 加载基地址 |
+| 可执行文件存在且可读 | 需要 mmap 文件来解析 ELF 符号表 |
+| 可执行文件未被 strip | 需要 .symtab 或 .dynsym 符号表 |
+
+**NO_DLADDR 模式的限制：**
+- 只能解析主程序的函数
+- 不能解析共享库（.so）中的函数
+- 如果需要解析共享库函数，请使用默认的 dladdr 模式
 
 ## 技术原理
 

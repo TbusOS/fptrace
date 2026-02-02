@@ -7,8 +7,26 @@
  * 
  * 特点：
  * - 纯代码实现，不依赖 addr2line、atos 等外部命令
+ * - 自动处理 PIE/ASLR 地址随机化
  * - 支持嵌入式 Linux 环境
  * - 提供线程安全版本
+ * 
+ * 两种模式：
+ * 
+ * 1. 默认模式（使用 dladdr）
+ *    编译: gcc your_code.c fptrace.c -ldl -o program
+ *    条件: 需要 libdl（大多数 Linux 系统都有）
+ *    优点: 可解析主程序和共享库的函数
+ * 
+ * 2. NO_DLADDR 模式（手动解析 ELF）
+ *    编译: gcc -DNO_DLADDR your_code.c fptrace.c -o program
+ *    条件（必须全部满足）:
+ *      - Linux 系统
+ *      - /proc/self/exe 可读
+ *      - /proc/self/maps 可读
+ *      - 可执行文件存在且可读
+ *      - 可执行文件未被 strip
+ *    限制: 只能解析主程序的函数，不能解析共享库
  * 
  * GitHub: https://github.com/TbusOS/fptrace
  * License: MIT

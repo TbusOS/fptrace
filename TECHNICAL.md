@@ -310,11 +310,34 @@ int dladdr(void *addr, Dl_info *info) {
 
 ---
 
-## 手动解析 ELF
+## 手动解析 ELF（NO_DLADDR 模式）
 
-当没有 `dladdr()` 时（某些嵌入式环境），需要手动解析：
+当没有 `dladdr()` 时（某些嵌入式环境），需要手动解析 ELF 符号表。
 
-### 步骤
+### 使用条件
+
+使用 `NO_DLADDR` 模式必须满足以下**全部**条件：
+
+| 条件 | 用途 | 缺失时的错误 |
+|-----|------|-------------|
+| Linux 系统 | ELF 格式 + /proc 文件系统 | 编译失败或运行时崩溃 |
+| `/proc/self/exe` 可读 | 获取可执行文件路径 | 返回 "(unknown)" |
+| `/proc/self/maps` 可读 | 获取 PIE/ASLR 加载基地址 | 地址计算错误，返回错误的函数名 |
+| 可执行文件存在且可读 | mmap 解析 ELF | 返回 "(unknown)" |
+| 未被 strip | 需要符号表 | 返回 "(unknown)" |
+
+### 限制
+
+- **只能解析主程序的函数**，不能解析共享库（.so）中的函数
+- 如果需要解析共享库函数，必须使用 dladdr() 模式
+
+### 编译方法
+
+```bash
+gcc -DNO_DLADDR -g your_code.c fptrace.c -o program
+```
+
+### 实现步骤
 
 ```c
 // 1. 获取可执行文件路径
