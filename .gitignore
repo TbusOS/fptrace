@@ -1,0 +1,25 @@
+# Build output
+build/
+*.o
+*.a
+*.so
+
+# Binaries
+test_fptrace
+elf_demo
+
+# macOS
+.DS_Store
+*.dSYM/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Debug
+*.log
+core
+core.*
