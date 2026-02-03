@@ -20,7 +20,17 @@ CFLAGS_BASE = -Wall -Wextra -g -I./src
 # 模式3: 禁用 backtrace（某些嵌入式环境没有）
 #   make NO_BACKTRACE=1
 #   - 堆栈追踪功能将不可用
+#
+# ARM32 堆栈追踪:
+#   make ARM_BACKTRACE=1
+#   - 添加 -fno-omit-frame-pointer -mapcs-frame
+#   - ARM32 上 backtrace() 需要这些选项才能正常工作
 #=============================================================================
+
+# ARM32 特殊处理：backtrace() 需要帧指针
+ifdef ARM_BACKTRACE
+    CFLAGS_BASE += -fno-omit-frame-pointer -mapcs-frame -O0
+endif
 
 ifdef NO_DLADDR
     # NO_DLADDR 模式：手动解析 ELF，不需要 libdl
@@ -126,8 +136,9 @@ help:
 	@echo "  make examples     - 编译所有示例"
 	@echo ""
 	@echo "编译选项:"
-	@echo "  make NO_DLADDR=1    - 使用 ELF 手动解析模式（不需要 libdl）"
-	@echo "  make NO_BACKTRACE=1 - 禁用堆栈追踪（某些嵌入式环境）"
+	@echo "  make NO_DLADDR=1     - 使用 ELF 手动解析模式（不需要 libdl）"
+	@echo "  make NO_BACKTRACE=1  - 禁用堆栈追踪（某些嵌入式环境）"
+	@echo "  make ARM_BACKTRACE=1 - ARM32 堆栈追踪支持（添加帧指针选项）"
 	@echo ""
 	@echo "运行命令:"
 	@echo "  make run          - 运行基础示例"
@@ -147,8 +158,16 @@ help:
 	@echo "  +------------------+------------------+--------------------+"
 	@echo ""
 	@echo "示例组合:"
-	@echo "  make CC=arm-gcc                      # ARM 交叉编译"
-	@echo "  make NO_DLADDR=1 NO_BACKTRACE=1      # 极简嵌入式"
+	@echo "  make CC=arm-gcc                               # ARM 交叉编译"
+	@echo "  make NO_DLADDR=1 ARM_BACKTRACE=1 examples     # ARM32 完整功能"
+	@echo "  make NO_DLADDR=1 NO_BACKTRACE=1               # 极简嵌入式"
+	@echo ""
+	@echo "ARM32 堆栈追踪说明:"
+	@echo "  ARM32 上 backtrace() 需要帧指针才能正常工作。"
+	@echo "  使用 ARM_BACKTRACE=1 会自动添加以下编译选项:"
+	@echo "    -fno-omit-frame-pointer  (保留帧指针)"
+	@echo "    -mapcs-frame             (ARM APCS 帧格式)"
+	@echo "    -O0                      (禁用优化)"
 	@echo ""
 	@echo "目录结构:"
 	@echo "  src/fptrace.h         - 函数名解析 API"

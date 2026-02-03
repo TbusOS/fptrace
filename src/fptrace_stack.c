@@ -179,22 +179,33 @@ void fptrace_stack_check(void *func_ptr)
 #ifndef NO_BACKTRACE
     /* 获取调用堆栈 */
     depth = backtrace(stack, FPTRACE_MAX_STACK_DEPTH);
-    symbols = backtrace_symbols(stack, depth);
     
-    fprintf(fp, "│ 调用堆栈 (深度 %d):\n", depth - 2);
-    
-    for (i = 2; i < depth; i++) {  /* 跳过 fptrace_stack_check 和调用者 */
-        const char *fname = fptrace_name(stack[i]);
-        fprintf(fp, "│   #%-2d %s (%p)\n", i - 2, fname, stack[i]);
+    if (depth <= 2) {
+        /* backtrace() 失败或返回太少的栈帧 */
+        fprintf(fp, "│ 调用堆栈: (无法获取，depth=%d)\n", depth);
+        fprintf(fp, "│ \n");
+        fprintf(fp, "│ 提示: ARM32 平台需要特殊编译选项:\n");
+        fprintf(fp, "│   -fno-omit-frame-pointer  (保留帧指针)\n");
+        fprintf(fp, "│   -mapcs-frame 或 -marm    (ARM32 专用)\n");
+        fprintf(fp, "│   -O0 或 -Og               (降低优化级别)\n");
+    } else {
+        symbols = backtrace_symbols(stack, depth);
         
-        /* 如果 fptrace 解析失败，显示 backtrace_symbols 的结果作为补充 */
-        if (symbols && strcmp(fname, "(unknown)") == 0) {
-            fprintf(fp, "│       └── %s\n", symbols[i]);
+        fprintf(fp, "│ 调用堆栈 (深度 %d):\n", depth - 2);
+        
+        for (i = 2; i < depth; i++) {  /* 跳过 fptrace_stack_check 和调用者 */
+            const char *fname = fptrace_name(stack[i]);
+            fprintf(fp, "│   #%-2d %s (%p)\n", i - 2, fname, stack[i]);
+            
+            /* 如果 fptrace 解析失败，显示 backtrace_symbols 的结果作为补充 */
+            if (symbols && strcmp(fname, "(unknown)") == 0) {
+                fprintf(fp, "│       └── %s\n", symbols[i]);
+            }
         }
-    }
-    
-    if (symbols) {
-        free(symbols);
+        
+        if (symbols) {
+            free(symbols);
+        }
     }
 #else
     fprintf(fp, "│ (堆栈追踪不可用 - NO_BACKTRACE 模式)\n");

@@ -270,6 +270,32 @@ make CC=arm-none-linux-gnueabi-gcc
 make CC=aarch64-linux-gnu-gcc
 ```
 
+### ARM32 堆栈追踪
+
+ARM32 平台上 `backtrace()` 需要帧指针才能正常工作。使用 `ARM_BACKTRACE=1` 选项：
+
+```bash
+# ARM32 完整功能（函数名解析 + 堆栈追踪）
+make NO_DLADDR=1 ARM_BACKTRACE=1 examples
+
+# 或手动添加编译选项
+arm-none-linux-gnueabi-gcc -fno-omit-frame-pointer -mapcs-frame -O0 ...
+```
+
+**ARM_BACKTRACE=1 会添加以下选项：**
+
+| 选项 | 作用 |
+|-----|------|
+| `-fno-omit-frame-pointer` | 保留帧指针（FP 寄存器） |
+| `-mapcs-frame` | 使用 ARM APCS 帧格式 |
+| `-O0` | 禁用优化（避免栈帧被优化掉） |
+
+**如果堆栈追踪仍然失败：**
+
+- 检查 glibc 是否支持 `backtrace()`
+- 尝试使用 `-marm` 代替 `-mapcs-frame`
+- 考虑使用 `NO_BACKTRACE=1` 禁用堆栈追踪
+
 ### 模式对比
 
 | 特性 | dladdr (默认) | NO_DLADDR |
