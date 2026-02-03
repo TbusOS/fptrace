@@ -57,7 +57,8 @@ FPT_TRACE(ops->read, buf, len);  // 自动记录调用堆栈到日志
 ```
 fptrace/
 ├── README.md                    # 使用指南
-├── TECHNICAL.md                 # 技术原理文档
+├── TECHNICAL.md                 # 函数名解析原理文档
+├── TECHNICAL_STACK.md           # 堆栈追踪原理文档
 ├── Makefile
 ├── src/                         # 📦 库源码
 │   ├── fptrace.h                # 函数名解析 API
@@ -309,12 +310,23 @@ gcc -DNO_DLADDR main.c fptrace.c -o program
 
 ## 技术原理
 
+### 函数名解析原理
+
 详见 [TECHNICAL.md](TECHNICAL.md)
 
 - ELF 符号表解析
 - dladdr() 工作原理
 - PIE/ASLR 处理
-- backtrace() 调用堆栈获取
+- 手动解析 ELF（NO_DLADDR 模式）
+
+### 堆栈追踪原理
+
+详见 [TECHNICAL_STACK.md](TECHNICAL_STACK.md)
+
+- backtrace() 工作机制
+- 栈帧结构（x86-64 / ARM32）
+- 注册表机制
+- 时间戳与统计
 
 ## License
 
