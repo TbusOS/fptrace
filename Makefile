@@ -5,7 +5,7 @@ CC = arm-none-linux-gnueabi-gcc
 CFLAGS_BASE = -Wall -Wextra -g -I./src
 
 #=============================================================================
-# 编译模式选择（二选一）
+# 编译模式选择
 #
 # 模式1: 使用 dladdr（默认，推荐）
 #   make
@@ -45,12 +45,13 @@ EXAMPLE_DIR = examples
 BUILD_DIR = build
 
 # 库源文件
-LIB_SRC = $(SRC_DIR)/fptrace.c
 LIB_OBJ = $(BUILD_DIR)/fptrace.o
+LIB_STACK_OBJ = $(BUILD_DIR)/fptrace_stack.o
 
 # 示例程序
 EXAMPLE = $(BUILD_DIR)/test_fptrace
 EXAMPLE_STACK = $(BUILD_DIR)/test_stack_trace
+EXAMPLE_MULTI = $(BUILD_DIR)/test_multi_handler
 
 .PHONY: all clean run run-stack help examples
 
@@ -61,26 +62,35 @@ all: $(BUILD_DIR) $(EXAMPLE)
 	@echo ""
 	@echo "提示: 使用 'make examples' 编译所有示例"
 
-examples: $(BUILD_DIR) $(EXAMPLE) $(EXAMPLE_STACK)
+examples: $(BUILD_DIR) $(EXAMPLE) $(EXAMPLE_STACK) $(EXAMPLE_MULTI)
 	@echo ""
 	@echo "编译完成! 模式: $(MODE_DESC)"
 	@echo "输出:"
-	@echo "  $(EXAMPLE)"
-	@echo "  $(EXAMPLE_STACK)"
+	@echo "  $(EXAMPLE)           - 基础函数名解析示例"
+	@echo "  $(EXAMPLE_STACK)     - 堆栈追踪示例"
+	@echo "  $(EXAMPLE_MULTI)     - 多 handler 追踪示例"
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-# 编译库对象文件
+# 编译 fptrace 库对象文件
 $(BUILD_DIR)/fptrace.o: $(SRC_DIR)/fptrace.c $(SRC_DIR)/fptrace.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# 编译测试示例
+# 编译 fptrace_stack 库对象文件
+$(BUILD_DIR)/fptrace_stack.o: $(SRC_DIR)/fptrace_stack.c $(SRC_DIR)/fptrace_stack.h $(SRC_DIR)/fptrace.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# 编译基础示例（只需要 fptrace）
 $(EXAMPLE): $(EXAMPLE_DIR)/test_fptrace.c $(LIB_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-# 编译堆栈追踪示例
-$(EXAMPLE_STACK): $(EXAMPLE_DIR)/test_stack_trace.c $(LIB_OBJ)
+# 编译堆栈追踪示例（需要 fptrace + fptrace_stack）
+$(EXAMPLE_STACK): $(EXAMPLE_DIR)/test_stack_trace.c $(LIB_OBJ) $(LIB_STACK_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# 编译多 handler 示例（需要 fptrace + fptrace_stack）
+$(EXAMPLE_MULTI): $(EXAMPLE_DIR)/test_multi_handler.c $(LIB_OBJ) $(LIB_STACK_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # 运行测试
@@ -94,15 +104,26 @@ run-stack: $(EXAMPLE_STACK)
 	@echo "=== 日志文件内容 ==="
 	@cat trace.log
 
+# 运行多 handler 示例
+run-multi: $(EXAMPLE_MULTI)
+	./$(EXAMPLE_MULTI)
+	@echo ""
+	@echo "=== 日志文件内容 ==="
+	@cat multi_trace.log
+
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) trace.log multi_trace.log
 
 help:
 	@echo "fptrace - Function Pointer Trace"
 	@echo ""
+	@echo "模块说明:"
+	@echo "  fptrace.h/c       - 函数名称解析"
+	@echo "  fptrace_stack.h/c - 调用堆栈追踪"
+	@echo ""
 	@echo "编译命令:"
 	@echo "  make              - 编译基础示例"
-	@echo "  make examples     - 编译所有示例（包括堆栈追踪）"
+	@echo "  make examples     - 编译所有示例"
 	@echo ""
 	@echo "编译选项:"
 	@echo "  make NO_DLADDR=1    - 使用 ELF 手动解析模式（不需要 libdl）"
@@ -111,6 +132,7 @@ help:
 	@echo "运行命令:"
 	@echo "  make run          - 运行基础示例"
 	@echo "  make run-stack    - 运行堆栈追踪示例"
+	@echo "  make run-multi    - 运行多 handler 示例"
 	@echo "  make clean        - 清理"
 	@echo ""
 	@echo "模式对比:"
@@ -129,6 +151,9 @@ help:
 	@echo "  make NO_DLADDR=1 NO_BACKTRACE=1      # 极简嵌入式"
 	@echo ""
 	@echo "目录结构:"
-	@echo "  src/          - 库源码（复制到你的项目使用）"
-	@echo "  examples/     - 示例代码"
-	@echo "  build/        - 编译输出"
+	@echo "  src/fptrace.h         - 函数名解析 API"
+	@echo "  src/fptrace.c         - 函数名解析实现"
+	@echo "  src/fptrace_stack.h   - 堆栈追踪 API"
+	@echo "  src/fptrace_stack.c   - 堆栈追踪实现"
+	@echo "  examples/             - 示例代码"
+	@echo "  build/                - 编译输出"

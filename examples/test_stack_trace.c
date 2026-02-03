@@ -9,7 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "fptrace.h"
+#include "fptrace_stack.h"  /* 堆栈追踪功能（已包含 fptrace.h） */
 
 /*============================================================================
  * 模拟的回调函数
