@@ -27,26 +27,32 @@ CFLAGS_BASE = -Wall -Wextra -g -I./src
 #   - ARM32 上 backtrace() 需要这些选项才能正常工作
 #=============================================================================
 
-# ARM32 特殊处理：backtrace() 需要帧指针
+# ARM32 特殊处理：backtrace() 需要帧指针和 unwind 信息
 ifdef ARM_BACKTRACE
-    CFLAGS_BASE += -fno-omit-frame-pointer -mapcs-frame -O0
+    CFLAGS_BASE += -fno-omit-frame-pointer -mapcs-frame -funwind-tables -fexceptions -O0
+    # ARM32 backtrace 可能需要 libgcc_s
+    LDFLAGS_ARM = -lgcc_s
 endif
 
 ifdef NO_DLADDR
     # NO_DLADDR 模式：手动解析 ELF，不需要 libdl
     CFLAGS = $(CFLAGS_BASE) -DNO_DLADDR
-    LDFLAGS =
+    LDFLAGS = $(LDFLAGS_ARM)
     MODE_DESC = NO_DLADDR (ELF手动解析)
 else
     # 默认模式：使用 dladdr，需要 -ldl -rdynamic
     CFLAGS = $(CFLAGS_BASE)
-    LDFLAGS = -ldl -rdynamic
+    LDFLAGS = -ldl -rdynamic $(LDFLAGS_ARM)
     MODE_DESC = dladdr (默认)
 endif
 
 ifdef NO_BACKTRACE
     CFLAGS += -DNO_BACKTRACE
     MODE_DESC := $(MODE_DESC) + NO_BACKTRACE
+endif
+
+ifdef ARM_BACKTRACE
+    MODE_DESC := $(MODE_DESC) + ARM_BACKTRACE
 endif
 
 # 目录
