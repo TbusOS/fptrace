@@ -275,11 +275,14 @@ make CC=aarch64-linux-gnu-gcc
 ARM32 平台上 `backtrace()` 需要帧指针才能正常工作。使用 `ARM_BACKTRACE=1` 选项：
 
 ```bash
-# ARM32 完整功能（函数名解析 + 堆栈追踪）
+# ARM32 有 libdl（推荐，可解析共享库函数）
+make ARM_BACKTRACE=1 examples
+
+# ARM32 无 libdl
 make NO_DLADDR=1 ARM_BACKTRACE=1 examples
 
-# 或手动添加编译选项
-arm-none-linux-gnueabi-gcc -fno-omit-frame-pointer -mapcs-frame -O0 ...
+# ARM32 无 backtrace（极简环境）
+make NO_DLADDR=1 NO_BACKTRACE=1 examples
 ```
 
 **ARM_BACKTRACE=1 会添加以下选项：**
