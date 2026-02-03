@@ -56,6 +56,16 @@ void fptrace_print(void *func_ptr)
     }
 }
 
+void fptrace_debug(void)
+{
+    printf("=== fptrace 诊断信息 (dladdr 模式) ===\n\n");
+    printf("[OK] 使用 dladdr 模式\n");
+    printf("  如果自定义函数显示 (unknown)，请确保:\n");
+    printf("  - 编译时使用 -rdynamic 链接选项\n");
+    printf("  - 可执行文件未被 strip\n");
+    printf("\n");
+}
+
 /*============================================================================
  * 方式2：手动解析 ELF 符号表（不依赖 dladdr）
  * 
@@ -108,6 +118,7 @@ static struct {
     int          symcount;
     const char  *strtab;
     void        *load_base;  /* 程序加载基地址 */
+    int          is_pie;     /* 是否是 PIE 程序 */
 } elf_cache = {0};
 
 /* 获取程序自身的可执行文件路径 */
@@ -196,6 +207,12 @@ static int init_elf_parser(void)
         return -1;
     }
     
+    /* 检测是否是 PIE（Position Independent Executable）
+     * ET_EXEC (2) = 普通可执行文件，符号地址就是运行时地址
+     * ET_DYN  (3) = PIE 或共享库，符号地址需要加上 load_base
+     */
+    elf_cache.is_pie = (ehdr->e_type == ET_DYN);
+    
     /* 查找 .symtab 和 .strtab */
     shdr = (Elf_Shdr *)((char *)elf_cache.map_base + ehdr->e_shoff);
     
@@ -236,27 +253,61 @@ static const char *lookup_symbol(void *addr)
         return NULL;
     }
     
-    /* 如果是 PIE，需要减去加载基地址 */
-    if (elf_cache.load_base) {
+    /* 
+     * 地址转换：
+     * - PIE 程序：符号表中是相对地址，需要把运行时地址减去 load_base
+     * - 非 PIE 程序：符号表中就是运行时地址，不需要转换
+     */
+    if (elf_cache.is_pie && elf_cache.load_base) {
         target -= (unsigned long)elf_cache.load_base;
     }
     
     for (i = 0; i < elf_cache.symcount; i++) {
         Elf_Sym *sym = &elf_cache.symtab[i];
         unsigned char type = ELF_ST_TYPE(sym->st_info);
+        unsigned long sym_size;
         
         /* 只查找函数符号 */
         if (type != STT_FUNC) {
             continue;
         }
         
+        /* 跳过未定义符号（导入的外部符号，如 libc 函数） */
+        if (sym->st_shndx == SHN_UNDEF) {
+            continue;
+        }
+        
+        /* 跳过 st_value 为 0 的符号 */
+        if (sym->st_value == 0) {
+            continue;
+        }
+        
+        /* 
+         * 确定符号大小：
+         * - 如果有明确大小，使用它
+         * - 否则只匹配精确地址（dist == 0）
+         */
+        sym_size = sym->st_size;
+        
         /* 检查地址是否在符号范围内 */
-        if (target >= sym->st_value && 
-            target < sym->st_value + (sym->st_size ? sym->st_size : 0x1000)) {
-            unsigned long dist = target - sym->st_value;
-            if (dist < best_dist) {
-                best_dist = dist;
-                best = sym;
+        if (sym_size > 0) {
+            /* 有明确大小，检查范围 */
+            if (target >= sym->st_value && target < sym->st_value + sym_size) {
+                unsigned long dist = target - sym->st_value;
+                if (dist < best_dist) {
+                    best_dist = dist;
+                    best = sym;
+                }
+            }
+        } else {
+            /* 没有大小信息，只匹配精确地址或作为 fallback */
+            if (target >= sym->st_value) {
+                unsigned long dist = target - sym->st_value;
+                /* 只有当没有更好的匹配时才使用，且距离要合理（< 64KB） */
+                if (dist < best_dist && dist < 0x10000) {
+                    best_dist = dist;
+                    best = sym;
+                }
             }
         }
     }
@@ -289,6 +340,85 @@ void fptrace_print(void *func_ptr)
     
     printf("Function: %s\n", fptrace_name(func_ptr));
     printf("  Address: %p\n", func_ptr);
+}
+
+void fptrace_debug(void)
+{
+    char exe_path[256];
+    int func_count = 0;
+    int i;
+    
+    printf("=== fptrace 诊断信息 (NO_DLADDR 模式) ===\n\n");
+    
+    /* 检查 /proc/self/exe */
+    if (get_exe_path(exe_path, sizeof(exe_path)) == 0) {
+        printf("[OK] /proc/self/exe -> %s\n", exe_path);
+    } else {
+        printf("[ERROR] 无法读取 /proc/self/exe\n");
+        return;
+    }
+    
+    /* 初始化 ELF 解析器 */
+    if (init_elf_parser() != 0) {
+        printf("[ERROR] ELF 解析器初始化失败\n");
+        printf("  可能原因:\n");
+        printf("  - 可执行文件不可读\n");
+        printf("  - 不是有效的 ELF 文件\n");
+        printf("  - 没有符号表 (.symtab 或 .dynsym)\n");
+        return;
+    }
+    
+    printf("[OK] ELF 文件映射成功\n");
+    printf("  map_base:  %p\n", elf_cache.map_base);
+    printf("  map_size:  %zu bytes\n", elf_cache.map_size);
+    printf("  load_base: %p\n", elf_cache.load_base);
+    printf("  is_pie:    %s (e_type=%s)\n", 
+           elf_cache.is_pie ? "是" : "否",
+           elf_cache.is_pie ? "ET_DYN" : "ET_EXEC");
+    printf("  symtab:    %p\n", (void *)elf_cache.symtab);
+    printf("  symcount:  %d\n", elf_cache.symcount);
+    printf("  strtab:    %p\n", elf_cache.strtab);
+    
+    /* 统计有效函数符号 */
+    for (i = 0; i < elf_cache.symcount; i++) {
+        Elf_Sym *sym = &elf_cache.symtab[i];
+        unsigned char type = ELF_ST_TYPE(sym->st_info);
+        
+        if (type == STT_FUNC && sym->st_shndx != SHN_UNDEF && sym->st_value != 0) {
+            func_count++;
+        }
+    }
+    
+    printf("\n[统计] 有效函数符号: %d 个\n", func_count);
+    
+    if (func_count == 0) {
+        printf("\n[WARNING] 没有找到有效的函数符号!\n");
+        printf("  可能原因:\n");
+        printf("  - 可执行文件被 strip 了\n");
+        printf("  - 只有 .dynsym 没有 .symtab\n");
+        printf("\n  解决方法:\n");
+        printf("  - 编译时使用 -g 选项\n");
+        printf("  - 不要 strip 可执行文件\n");
+        printf("  - 或者使用 dladdr 模式 (不加 NO_DLADDR)\n");
+    } else {
+        printf("\n[前10个函数符号]\n");
+        int shown = 0;
+        for (i = 0; i < elf_cache.symcount && shown < 10; i++) {
+            Elf_Sym *sym = &elf_cache.symtab[i];
+            unsigned char type = ELF_ST_TYPE(sym->st_info);
+            
+            if (type == STT_FUNC && sym->st_shndx != SHN_UNDEF && sym->st_value != 0) {
+                const char *name = elf_cache.strtab + sym->st_name;
+                printf("  0x%08lx [size=%4lu] %s\n", 
+                       (unsigned long)sym->st_value,
+                       (unsigned long)sym->st_size,
+                       name);
+                shown++;
+            }
+        }
+    }
+    
+    printf("\n");
 }
 
 #endif /* NO_DLADDR */

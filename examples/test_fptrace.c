@@ -163,6 +163,9 @@ int main(void)
     printf("║   fptrace - Function Pointer Trace 示例            ║\n");
     printf("╚════════════════════════════════════════════════════╝\n\n");
     
+    /* 先打印诊断信息 */
+    fptrace_debug();
+    
     test_scenario_unknown_callback();
     test_scenario_trace_call();
     test_scenario_ops_struct();
